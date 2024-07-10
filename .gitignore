@@ -2,3 +2,4 @@ data/*
 data_test/*
 qJetClassifier/__pycache__
 logs/*
+*.out

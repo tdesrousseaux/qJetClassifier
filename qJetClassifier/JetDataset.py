@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import numpy as np  
 from torch_geometric.utils import from_networkx, to_networkx
+import networkx as nx
 
 
 class JetDataset(Dataset):

@@ -1,6 +1,7 @@
-import pennylane as qml
-from torch import nn
 from typing import Dict
+import pennylane as qml
+import torch
+from torch import nn
 import contextlib
 
 def R_X_layer(graph, parameters):
@@ -11,9 +12,9 @@ def R_X_layer(graph, parameters):
         parameters (torch.Tensor): the trainable parameters for the equivariant layer
     """
 
-    for node in graph.nodes:
-        qml.RX(torch.inner(parameters, torch.tensor(graph.nodes[node]['pTEtaPhi'])),
-               wires=node)
+    for i in range(graph.num_nodes):
+        qml.RX(torch.inner(parameters, graph.pTEtaPhi[i]),
+               wires=i)
         
 def ZZ_layer(graph, parameters):
     """Encode the edges of the graph using ZZ gates, multiplied by trainable parameters
@@ -23,20 +24,20 @@ def ZZ_layer(graph, parameters):
         parameters (torch.Tensor): the trainable parameters for the equivariant layer
     """
 
-    for edge in graph.edges:  #The order doesn't matter, the gates commute between each other
-        qml.IsingZZ(torch.inner(parameters, torch.tensor(graph.edges[edge]['edge'])),
-                    wires=edge[:2])
+    for i in range(len(graph.edge)):  #The order doesn't matter, the gates commute between each other
+        qml.IsingZZ(torch.inner(parameters, graph.edge[i]),
+                    wires=graph.edge_index[:,i].tolist())
 
 
 def feature_map(graph, feature_parameters):
     """Encode the nodes and edges of the graph using R_X and ZZ gates, multiplied by trainable parameters
 
     Args:
-        graph (Networkx.Graph): a fully connected graph representing the jet
+        graph (torch_geometric.data.Data): a fully connected graph representing the jet
         feature_parameters (torch.Tensor): the trainable parameters for the feature map
     """
-    nb_node_features = len(graph.nodes[0]['pTEtaPhi'])
-    nb_edge_features = len(graph.edges[0,1]['edge'])
+    nb_node_features = len(graph.pTEtaPhi[0])
+    nb_edge_features = len(graph.edge[0])
     nb_parameters = len(feature_parameters)
 
     assert nb_parameters == nb_node_features + nb_edge_features, "The number of feature parameters is not correct"
@@ -49,25 +50,25 @@ def equivariant_ansatz(graph, parameters, nb_layers):
     """The trainable equivariant ansatz
 
     Args:
-        graph (Networkx.Graph): a fully connected graph representing the jet
+        graph (torch_geometric.data.Data): a fully connected graph representing the jet
         parameters (torch.Tensor): the trainable parameters for the equivariant layer
         nb_layers (int): the number of layers of the ansatz
     """
 
-    nb_wires = len(graph.nodes)
+    nb_wires = graph.num_nodes
     assert len(parameters) == 4 * nb_layers, "The number of parameters of the ansatz is not correct"
 
     for layer in range(nb_layers):
         for i in range(nb_wires):
             qml.Rot(*parameters[4*layer:4*layer+3], wires=i)
-        for edge in graph.edges:
-            qml.IsingZZ(parameters[4*layer+3], wires=edge[:2])
+        for i in range(len(graph.edge)):
+            qml.IsingZZ(parameters[4*layer+3], wires=graph.edge_index[:,i].tolist())
 
 def reuploading_circuit(graph, parameters, nb_reuploading, nb_ansatz_layers):
     """A circuit that encodes the graph using the re-uploading strategy
 
     Args:
-        graph (Networkx.Graph): a fully connected graph representing the jet
+        graph (torch_geometric.data.Data): a fully connected graph representing the jet
         parameters (torch.Tensor): the trainable parameters for the equivariant layer
         nb_reuploading (int): the number of re-uploading steps
         nb_ansatz_layers (int): the number of layers of the ansatz
@@ -76,8 +77,9 @@ def reuploading_circuit(graph, parameters, nb_reuploading, nb_ansatz_layers):
     nb_parameters = len(parameters)
     nb_parameters_per_layer = nb_parameters // nb_reuploading
     assert nb_parameters % nb_reuploading == 0, "The number of parameters is not divisible by the number of re-uploading steps"
+    num_nodes = graph.num_nodes
 
-    for i in graph.nodes:
+    for i in range(num_nodes):
         qml.Hadamard(wires=i)
 
     for layer in range(nb_reuploading):
@@ -88,8 +90,8 @@ def reuploading_circuit(graph, parameters, nb_reuploading, nb_ansatz_layers):
         feature_map(graph, feature_parameters)
         equivariant_ansatz(graph, ansatz_parameters, nb_ansatz_layers)
 
-    N = len(graph.nodes)
-    probability = [qml.expval(qml.Z(wire)) for wire in range (N)]          #TO MODIFY
+
+    probability = [qml.expval(qml.Z(wire)) for wire in range(num_nodes)]          #TO MODIFY
     return probability
 
 class QLayer(nn.Module):
@@ -117,7 +119,7 @@ class QLayer(nn.Module):
             super().__setattr__(item, val)
 
     def _init_weights(self):
-        self.qnode_weights["weights"] = nn.Parameter(torch.randn(self.nb_parameters))
+        self.qnode_weights["weights"] = nn.Parameter(torch.randn(self.nb_parameters, dtype=torch.float64))
         self.register_parameter("weights", self.qnode_weights["weights"])
 
     def forward(self, graph):
