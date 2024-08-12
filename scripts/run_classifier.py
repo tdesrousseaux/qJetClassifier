@@ -28,7 +28,7 @@ parser.add_argument('--batch_size', type=int, default=10)
 parser.add_argument('-e', '--nb_epochs', type=int, default=100)
 parser.add_argument('-tr', '--nb_train_samples', type=int, default=1000)
 parser.add_argument('-te', '--nb_test_samples', type=int, default=100)
-parser.add_argument('-s', '--sum_observable', type=bool, default=True)
+parser.add_argument('-s', '--sum_observable', action='store_true', default=False)
 
 args = parser.parse_args()
 
@@ -92,7 +92,8 @@ class LitQJetClassifier(L.LightningModule):
         self.roc.update(y_hat, y)
       
     def on_test_epoch_end(self) -> None:
-        fig_, ax_ = self.roc.plot(score=True)
+        labels = ['g', 'q', 'W', 'Z', 't']
+        fig_, ax_ = self.roc.plot(score=True, labels=labels)
 
         log_dir = self.logger.log_dir
         path = os.path.join(log_dir, "roc_curve.png")

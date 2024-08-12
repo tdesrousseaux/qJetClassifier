@@ -3,3 +3,4 @@ data_test/*
 qJetClassifier/__pycache__
 logs/*
 *.out
+notebook/lightning_logs/*

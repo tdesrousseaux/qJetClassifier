@@ -7,7 +7,7 @@ do
         for reuploading in 3 5
         do  
             tr_sample=$((10*sample))
-            nohup python -m run_classifier.py -e $epoch -te $sample -r $reuploading -tr $tr_sample > run_epoch_${epoch}_sample_${sample}_reuploading_${reuploading}.out &
+            nohup python -m run_classifier.py -e $epoch -te $sample -r $reuploading -tr $tr_sample -s False > run_epoch_${epoch}_sample_${sample}_reuploading_${reuploading}.out &
             sleep 20
         done
     done
